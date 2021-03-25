@@ -89,7 +89,7 @@ func main() {
 
 		creds, err = assumeRole(roleConfig.Role, roleConfig.MFA, *duration)
 	} else {
-		creds, err = assumeProfile(role)
+		creds, err = assumeProfile(role, *mfa)
 	}
 
 	must(err)
@@ -168,12 +168,21 @@ func printPowerShellCredentials(role string, creds *credentials.Value) {
 // assumeProfile assumes the named profile which must exist in ~/.aws/config
 // (https://docs.aws.amazon.com/cli/latest/userguide/cli-roles.html) and returns the temporary STS
 // credentials.
-func assumeProfile(profile string) (*credentials.Value, error) {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		Profile:                 profile,
-		SharedConfigState:       session.SharedConfigEnable,
-		AssumeRoleTokenProvider: readTokenCode,
-	}))
+func assumeProfile(profile string, mfaToken string) (*credentials.Value, error) {
+	opts := session.Options{
+		Profile:           profile,
+		SharedConfigState: session.SharedConfigEnable,
+	}
+
+	if len(mfaToken) > 0 {
+		opts.AssumeRoleTokenProvider = func() (string, error) {
+			return mfaToken, nil
+		}
+	} else {
+		opts.AssumeRoleTokenProvider = readTokenCode
+	}
+
+	sess := session.Must(session.NewSessionWithOptions(opts))
 
 	creds, err := sess.Config.Credentials.Get()
 	if err != nil {
